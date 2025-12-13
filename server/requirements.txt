@@ -1,0 +1,15 @@
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+langchain-openai>=0.2.0
+langchain-core>=0.2.0
+langgraph>=0.2.0
+langchain-tavily>=0.1.0
+
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+
+# Streaming + auth prep
+sse-starlette>=1.6.5
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
