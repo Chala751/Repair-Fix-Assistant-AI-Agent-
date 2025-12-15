@@ -15,8 +15,10 @@ repair_agent = graph.compile()
 def initial_repair_state(query: str) -> RepairState:
     return {
         "query": query,
-        "device": None,
-        "device_wikiid": None,
+        "device_title": None,
+        "device_slug": None,
         "guide": None,
         "fallback_used": False,
     }
+
+

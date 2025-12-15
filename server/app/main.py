@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
-from app.api.chat.router import router as chat_router
+from app.api.chat.router import chat_router, debug_router
 
 load_dotenv()
 
@@ -13,4 +13,6 @@ app = FastAPI(
 def health_check():
     return {"status": "ok"}
 
+
 app.include_router(chat_router)
+app.include_router(debug_router)

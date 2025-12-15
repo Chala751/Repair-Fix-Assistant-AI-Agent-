@@ -6,10 +6,11 @@ from app.tools.ifixit import search_device, list_guides, get_guide
 from app.tools.cleanup import clean_ifixit_guide
 from urllib.parse import quote
 
-router = APIRouter(prefix="/chat", tags=["Chat"])
-router = APIRouter(prefix="/debug", tags=["Debug iFixit"])
+chat_router = APIRouter(prefix="/chat", tags=["Chat"])
+debug_router = APIRouter(prefix="/debug", tags=["Debug iFixit"])
 
-@router.post("/stream")
+
+@chat_router.post("/stream")
 def chat_stream(query: str):
     """Stream repair guide step by step."""
     def generator():
@@ -40,41 +41,30 @@ def chat_stream(query: str):
     return stream_response(generator())
 
 
-@router.get("/device-guides")
-def device_guides(query: str):
+@debug_router.get("/device-guides")
+def device_guides(device: str):
     """
-    Search iFixit for a device and retrieve its guides.
-    Returns guide titles and URLs for inspection.
+    Debug endpoint to inspect raw CATEGORY guides.
     """
     try:
-        
-        device_title = search_device(query)
-        if not device_title:
-            return {"error": "No matching device found on iFixit."}
+        guides = list_guides(device)
 
-        
-        raw_guides = list_guides(device_title)
-        if not raw_guides:
-            device_url = f"https://www.ifixit.com/Device/{quote(device_title)}"
-            return {
-                "device": device_title,
-                "guides": [],
-                "info": f"No guides found. Check iFixit page: {device_url}"
-            }
-
-        
-        guides_list = []
-        for guide in raw_guides:
-            guide_id = guide.get("wikiid") or guide.get("guideid")
+        cleaned = []
+        for g in guides:
+            guide_id = g.get("guideid") or g.get("wikiid")
             if not guide_id:
-                continue
-            raw_guide_data = get_guide(guide_id)
-            cleaned = clean_ifixit_guide(raw_guide_data)
-            guides_list.append(cleaned)
+                continue  # skip non-guides
+
+            cleaned.append({
+                "id": guide_id,
+                "title": g.get("title"),
+                "type": "guide" if "guideid" in g else "wiki"
+            })
 
         return {
-            "device": device_title,
-            "guides": guides_list
+            "device": device,
+            "guide_count": len(cleaned),
+            "guides": cleaned
         }
 
     except Exception as e:
