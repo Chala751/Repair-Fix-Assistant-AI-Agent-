@@ -1,90 +1,49 @@
-from app.tools.ifixit import search_device, list_guides, get_guide
-from app.tools.cleanup import clean_ifixit_guide
+from app.tools.ifixit import get_ifixit_tools
+from app.tools.web_search import web_search
+from app.tools.cleanup import format_final_answer
 
-FORBIDDEN_WORDS = [
-    "replacement", "repair", "issues", "fix",
-    "problem", "screen", "battery", "speaker"
-]
+ifixit = get_ifixit_tools()
 
-
-def is_valid_device_slug(slug: str) -> bool:
-    slug_lower = slug.lower()
-    return not any(word in slug_lower for word in FORBIDDEN_WORDS)
-
-def find_device(state):
-    device = search_device(state["query"])
-    if not device:
-        return state
-
-    title = device.get("title")
-    if not title:
-        return state
-
-    slug = title.replace(" ", "_")
-
-    # 🛑 HARD STOP
-    if not is_valid_device_slug(slug):
-        state["fallback_used"] = True
-        return state
-
-    state["device_title"] = title
-    state["device_slug"] = slug
+async def normalize_query(state):
+    state["tool_status"].append("🔍 Normalizing query")
+    state["ifixit_device"] = state["query"]
     return state
 
-
-def fetch_guide(state):
-    slug = state.get("device_slug")
-    if not slug:
+async def search_device(state):
+    state["tool_status"].append("📱 Searching device on iFixit")
+    result = await ifixit.search_devices(state["ifixit_device"])
+    if not result:
         return state
+    return state
 
-    guides = list_guides(slug)
-    if not guides:
-        return state
+async def list_guides(state):
+    state["tool_status"].append("📚 Listing repair guides")
+    guides = await ifixit.list_guides(state["ifixit_device"])
+    if guides:
+        state["available_guides"] = guides["guides"]
+    return state
 
-    intent = state["query"].lower()
+async def select_guide(state):
+    state["tool_status"].append("✅ Selecting best guide")
+    guides = state.get("available_guides", [])
+    if guides:
+        state["selected_guide"] = guides[0]
+    return state
 
-    selected_id = None
-    fallback_id = None
+async def fetch_guide(state):
+    state["tool_status"].append("🛠 Fetching repair steps")
+    guide = state["selected_guide"]
+    if guide:
+        state["repair_steps"] = await ifixit.fetch_repair_guide(guide["guideid"])
+    return state
 
-    for g in guides:
-        guide_id = g.get("guideid")
+async def fallback_search(state):
+    state["tool_status"].append("🌐 Using web fallback")
+    state["final_response"] = await web_search(state["query"])
+    state["fallback_used"] = True
+    return state
 
-        # ✅ skip wikis
-        if not guide_id:
-            continue
-
-        # normalize guide_id (string → int)
-        try:
-            guide_id = int(guide_id)
-        except Exception:
-            continue
-
-        title = (g.get("title") or "").lower()
-
-        # 🎯 intent match
-        if "screen" in intent and "screen" in title:
-            selected_id = guide_id
-            break
-
-        if "battery" in intent and "battery" in title:
-            selected_id = guide_id
-            break
-
-        if "speaker" in intent and "speaker" in title:
-            selected_id = guide_id
-            break
-
-        # remember first valid guide
-        if not fallback_id:
-            fallback_id = guide_id
-
-    # fallback if no intent match
-    if not selected_id:
-        selected_id = fallback_id
-
-    if not selected_id:
-        return state
-
-    guide = get_guide(selected_id)
-    state["guide"] = clean_ifixit_guide(guide)
+async def format_response(state):
+    state["tool_status"].append("📦 Formatting response")
+    state["final_response"] = format_final_answer(state)
     return state
