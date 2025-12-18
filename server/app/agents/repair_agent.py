@@ -1,24 +1,42 @@
-from langgraph.graph import StateGraph
-from app.agents.state import RepairState
-from app.agents.nodes import find_device, fetch_guide
+from langgraph.graph import StateGraph, END
+from app.agents.state import AgentState
+from app.agents.nodes import *
 
-graph = StateGraph(RepairState)
+def should_fallback(state):
+    if not state.get("selected_guide"):
+        return "fallback"
+    return "format"
 
-graph.add_node("find_device", find_device)
-graph.add_node("fetch_guide", fetch_guide)
+def build_agent():
+    graph = StateGraph(AgentState)
 
-graph.set_entry_point("find_device")
-graph.add_edge("find_device", "fetch_guide")
+    graph.add_node("normalize", normalize_query)
+    graph.add_node("search", search_device)
+    graph.add_node("guides", list_guides)
+    graph.add_node("select", select_guide)
+    graph.add_node("fetch", fetch_guide)
+    graph.add_node("fallback", fallback_search)
+    graph.add_node("format", format_response)
 
-repair_agent = graph.compile()
+    graph.set_entry_point("normalize")
 
-def initial_repair_state(query: str) -> RepairState:
-    return {
-        "query": query,
-        "device_title": None,
-        "device_slug": None,
-        "guide": None,
-        "fallback_used": False,
-    }
+    graph.add_edge("normalize", "search")
+    graph.add_edge("search", "guides")
+    graph.add_edge("guides", "select")
 
+    graph.add_conditional_edges(
+        "select",
+        should_fallback,
+        {
+            "fallback": "fallback",
+            "format": "fetch"
+        }
+    )
 
+    graph.add_edge("fetch", "format")
+    graph.add_edge("fallback", "format")
+    graph.add_edge("format", END)
+
+    return graph.compile()
+
+repair_agent = build_agent()
